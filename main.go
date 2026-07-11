@@ -11,12 +11,14 @@ import (
 	"sync/atomic"
 
 	"github.com/andytrue7/chirpy/internal/database"
+	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
 )
 
 type apiConfig struct {
 	fileserverHits atomic.Int32
 	db *database.Queries
+	platform string
 }
 
 func (cfg *apiConfig) middlewareMetricsInc(next http.Handler) http.Handler {
@@ -38,33 +40,44 @@ func (cfg *apiConfig) writeServerHits(w http.ResponseWriter, r *http.Request) {
 	`, cfg.fileserverHits.Load())
 }
 
-func (cfg *apiConfig) resetHits(w http.ResponseWriter, r *http.Request) {
-	cfg.fileserverHits.Store(0)
-	w.WriteHeader(http.StatusOK)
-}
-
 func main() {
 	const filePathRoot = "."
 	const port = "8080"
-	apiCfg := apiConfig{}
-	mux := http.NewServeMux()
+	
+	godotenv.Load()
 	
 	dbURL := os.Getenv("DB_URL")
+	if dbURL == ""{
+		log.Fatalf("DB_URL env variable is not set")
+	}
+
+	platform := os.Getenv("PLATFORM")
+	if platform == ""{
+		log.Fatalf("PLATFORM env variable is not set")
+	}
+
 	db, err := sql.Open("postgres", dbURL)
 	if err != nil {
 		log.Fatal("Failed to connect to database: ", err)
 	}
 	dbQueries:= database.New(db)
-	apiCfg.db = dbQueries
 	log.Println("Connected to database")
 
+	apiCfg := apiConfig{
+		fileserverHits: atomic.Int32{},
+		db: dbQueries,
+		platform: platform,
+	}
+
+	mux := http.NewServeMux()
 	fileHandler := http.FileServer(http.Dir(filePathRoot))
 	mux.Handle("/app/", apiCfg.middlewareMetricsInc(http.StripPrefix("/app", fileHandler)))
 
 	mux.HandleFunc("GET /api/healthz", handleReadiness)
 	mux.HandleFunc("GET /admin/metrics", apiCfg.writeServerHits)
-	mux.HandleFunc("POST /admin/reset", apiCfg.resetHits)
+	mux.HandleFunc("POST /admin/reset", apiCfg.handlerReset)
 	mux.HandleFunc("POST /api/validate_chirp", handleValidateChirp)
+	mux.HandleFunc("POST /api/users", apiCfg.handleCreateUser)
 
 	srv := http.Server{
 		Addr: ":" + port,
