@@ -2,7 +2,6 @@ package main
 
 import (
 	"database/sql"
-	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -76,8 +75,10 @@ func main() {
 	mux.HandleFunc("GET /api/healthz", handleReadiness)
 	mux.HandleFunc("GET /admin/metrics", apiCfg.writeServerHits)
 	mux.HandleFunc("POST /admin/reset", apiCfg.handlerReset)
-	mux.HandleFunc("POST /api/validate_chirp", handleValidateChirp)
 	mux.HandleFunc("POST /api/users", apiCfg.handleCreateUser)
+	mux.HandleFunc("POST /api/chirps", apiCfg.handleCreateChirp)
+	mux.HandleFunc("GET /api/chirps", apiCfg.handleGetChirps)
+	mux.HandleFunc("GET /api/chirps/{id}", apiCfg.handleGetChirpByID)
 
 	srv := http.Server{
 		Addr: ":" + port,
@@ -93,40 +94,6 @@ func handleReadiness(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(http.StatusText(http.StatusOK)))
 }
 
-func handleValidateChirp(w http.ResponseWriter, r *http.Request) {
-	type parameters struct {
-		Body string `json:"body"`
-	}
-
-	type returnVal struct {
-		CleanedBody string `json:"cleaned_body"`
-	}
-
-	var req parameters
-	err := json.NewDecoder(r.Body).Decode(&req)
-	if err != nil {
-		respondWithError(w, http.StatusInternalServerError, "Failed to decode request")
-		return
-	}
-
-	const maxChirpLength = 140
-	if len(req.Body) > maxChirpLength {
-		respondWithError(w, http.StatusBadRequest, "Chirp is too long")
-		return
-	}
-
-	badWords := map[string]struct{}{
-		"kerfuffle": {},
-		"sharbert": {},
-		"fornax": {},
-	}
-
-	cleaned:= getCleanedChirp(req.Body, badWords)
-
-	respondWithJSON(w, http.StatusOK, returnVal{
-		CleanedBody: cleaned,
-	})
-}
 
 func getCleanedChirp(body string, badWords map[string]struct{}) string {
 	words := strings.Split(body, " ")
