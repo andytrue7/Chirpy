@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/andytrue7/chirpy/internal/auth"
 	"github.com/andytrue7/chirpy/internal/database"
 	"github.com/google/uuid"
 )
@@ -22,15 +23,26 @@ type Chirp struct{
 func(cfg *apiConfig) handleCreateChirp(w http.ResponseWriter, r *http.Request){
 	type parameters struct {
 		Body string `json:"body"`
-		UserID uuid.UUID `json:"user_id"`
 	}
 
 	type response struct {
 		Chirp
 	}
 
+	token, err := auth.GetBearerToken(r.Header)
+	if err != nil {
+		respondWithError(w, http.StatusUnauthorized, err.Error())
+		return
+	}
+
+	userID, err := auth.ValidateJWT(token, cfg.jwtSecret)
+	if err != nil {
+		respondWithError(w, http.StatusUnauthorized, err.Error())
+		return
+	}
+
 	var req parameters
-	err := json.NewDecoder(r.Body).Decode(&req)
+	err = json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "Failed to decode request")
 		return
@@ -51,7 +63,7 @@ func(cfg *apiConfig) handleCreateChirp(w http.ResponseWriter, r *http.Request){
 	cleaned:= getCleanedChirp(req.Body, badWords)
 
 	chirp, err := cfg.db.CreateChirp(r.Context(), database.CreateChirpParams{
-		UserID: req.UserID,
+		UserID: userID,
 		Body: cleaned,
 	})
 

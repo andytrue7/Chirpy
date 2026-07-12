@@ -8,6 +8,7 @@ import (
 	"os"
 	"strings"
 	"sync/atomic"
+	"time"
 
 	"github.com/andytrue7/chirpy/internal/database"
 	"github.com/joho/godotenv"
@@ -18,6 +19,8 @@ type apiConfig struct {
 	fileserverHits atomic.Int32
 	db *database.Queries
 	platform string
+	jwtSecret string
+	tokenExp time.Duration
 }
 
 func (cfg *apiConfig) middlewareMetricsInc(next http.Handler) http.Handler {
@@ -55,6 +58,11 @@ func main() {
 		log.Fatalf("PLATFORM env variable is not set")
 	}
 
+	jwtSecret := os.Getenv("JWT_SECRET")
+	if jwtSecret == ""{
+		log.Fatalf("JWT_SECRET env variable is not set")
+	}
+
 	db, err := sql.Open("postgres", dbURL)
 	if err != nil {
 		log.Fatal("Failed to connect to database: ", err)
@@ -66,6 +74,8 @@ func main() {
 		fileserverHits: atomic.Int32{},
 		db: dbQueries,
 		platform: platform,
+		jwtSecret: jwtSecret,
+		tokenExp: time.Minute * 15,
 	}
 
 	mux := http.NewServeMux()
@@ -80,6 +90,8 @@ func main() {
 	mux.HandleFunc("GET /api/chirps", apiCfg.handleGetChirps)
 	mux.HandleFunc("GET /api/chirps/{id}", apiCfg.handleGetChirpByID)
 	mux.HandleFunc("POST /api/login", apiCfg.handleLogin)
+	mux.HandleFunc("POST /api/refresh", apiCfg.handleRefreshToken)
+	mux.HandleFunc("POST /api/revoke", apiCfg.handleRevokeToken)
 
 	srv := http.Server{
 		Addr: ":" + port,
