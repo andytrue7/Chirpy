@@ -58,3 +58,60 @@ func (cfg *apiConfig) handleCreateUser(w http.ResponseWriter, r *http.Request) {
 		},
 	})
 }
+
+
+func (cfg *apiConfig) handleUpdateUser(w http.ResponseWriter, r *http.Request){
+	
+	token, err := auth.GetBearerToken(r.Header)
+	if err != nil {
+		respondWithError(w, http.StatusUnauthorized, err.Error())
+		return
+	}
+
+	userID, err := auth.ValidateJWT(token, cfg.jwtSecret)
+	if err != nil {
+		respondWithError(w, http.StatusUnauthorized, err.Error())
+		return
+	}
+
+	type parameters struct {
+		Email string `json:"email"`
+		Password string `json:"password"`
+	}
+
+	type response struct {
+		User
+	}
+
+	var req parameters
+	err = json.NewDecoder(r.Body).Decode(&req)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Failed to decode request")
+		return
+	}
+
+	hashedPassword, err := auth.HashPassword(req.Password)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Failed to hash password")
+		return
+	}
+
+	user, err := cfg.db.UpdateUser(r.Context(), database.UpdateUserParams{
+		ID: userID,
+		Email: req.Email,
+		Password: hashedPassword,
+	})
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Failed to update user")
+		return
+	}
+
+	respondWithJSON(w, http.StatusOK, response{
+		User: User{
+			ID: user.ID,
+			CreatedAt: user.CreatedAt.Time,
+			UpdatedAt: user.UpdatedAt.Time,
+			Email: user.Email,
+		},
+	})
+}
