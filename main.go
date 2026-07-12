@@ -17,10 +17,10 @@ import (
 
 type apiConfig struct {
 	fileserverHits atomic.Int32
-	db *database.Queries
-	platform string
-	jwtSecret string
-	tokenExp time.Duration
+	db             *database.Queries
+	platform       string
+	jwtSecret      string
+	tokenExp       time.Duration
 }
 
 func (cfg *apiConfig) middlewareMetricsInc(next http.Handler) http.Handler {
@@ -45,21 +45,21 @@ func (cfg *apiConfig) writeServerHits(w http.ResponseWriter, r *http.Request) {
 func main() {
 	const filePathRoot = "."
 	const port = "8080"
-	
+
 	godotenv.Load()
-	
+
 	dbURL := os.Getenv("DB_URL")
-	if dbURL == ""{
+	if dbURL == "" {
 		log.Fatalf("DB_URL env variable is not set")
 	}
 
 	platform := os.Getenv("PLATFORM")
-	if platform == ""{
+	if platform == "" {
 		log.Fatalf("PLATFORM env variable is not set")
 	}
 
 	jwtSecret := os.Getenv("JWT_SECRET")
-	if jwtSecret == ""{
+	if jwtSecret == "" {
 		log.Fatalf("JWT_SECRET env variable is not set")
 	}
 
@@ -67,15 +67,15 @@ func main() {
 	if err != nil {
 		log.Fatal("Failed to connect to database: ", err)
 	}
-	dbQueries:= database.New(db)
+	dbQueries := database.New(db)
 	log.Println("Connected to database")
 
 	apiCfg := apiConfig{
 		fileserverHits: atomic.Int32{},
-		db: dbQueries,
-		platform: platform,
-		jwtSecret: jwtSecret,
-		tokenExp: time.Minute * 15,
+		db:             dbQueries,
+		platform:       platform,
+		jwtSecret:      jwtSecret,
+		tokenExp:       time.Minute * 15,
 	}
 
 	mux := http.NewServeMux()
@@ -94,9 +94,10 @@ func main() {
 	mux.HandleFunc("POST /api/revoke", apiCfg.handleRevokeToken)
 	mux.HandleFunc("PUT /api/users", apiCfg.handleUpdateUser)
 	mux.HandleFunc("DELETE /api/chirps/{id}", apiCfg.handleDeleteChirp)
+	mux.HandleFunc("POST /api/polka/webhooks", apiCfg.handleChirpify)
 
 	srv := http.Server{
-		Addr: ":" + port,
+		Addr:    ":" + port,
 		Handler: mux,
 	}
 
@@ -108,7 +109,6 @@ func handleReadiness(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte(http.StatusText(http.StatusOK)))
 }
-
 
 func getCleanedChirp(body string, badWords map[string]struct{}) string {
 	words := strings.Split(body, " ")
