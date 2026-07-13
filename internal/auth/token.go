@@ -33,3 +33,17 @@ func MakeRefreshToken() string {
 	}
 	return hex.EncodeToString(b)
 }
+
+func GetApiKey(headers http.Header) (string, error) {
+	authHeader, ok := headers["Authorization"]
+	if !ok {
+		return "", errors.New("no auth header")
+	}
+
+	parts := strings.Split(authHeader[0], " ")
+	if len(parts) != 2 || parts[0] != "ApiKey" {
+		return "", errors.New("invalid auth header")
+	}
+
+	return parts[1], nil
+}

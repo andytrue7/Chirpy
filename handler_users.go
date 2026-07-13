@@ -121,6 +121,16 @@ func (cfg *apiConfig) handleUpdateUser(w http.ResponseWriter, r *http.Request) {
 }
 
 func (cfg *apiConfig) handleChirpify(w http.ResponseWriter, r *http.Request) {
+	apiKey, err := auth.GetApiKey(r.Header)
+	if err != nil {
+		respondWithError(w, http.StatusUnauthorized, err.Error())
+		return
+	}
+	if apiKey != cfg.polkaKey {
+		respondWithError(w, http.StatusUnauthorized, "Invalid API key")
+		return
+	}
+
 	type parameters struct {
 		Event string `json:"event"`
 		Data  struct {
@@ -129,7 +139,7 @@ func (cfg *apiConfig) handleChirpify(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req parameters
-	err := json.NewDecoder(r.Body).Decode(&req)
+	err = json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "Failed to decode request")
 		return

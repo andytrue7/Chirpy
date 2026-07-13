@@ -21,6 +21,7 @@ type apiConfig struct {
 	platform       string
 	jwtSecret      string
 	tokenExp       time.Duration
+	polkaKey       string
 }
 
 func (cfg *apiConfig) middlewareMetricsInc(next http.Handler) http.Handler {
@@ -63,6 +64,11 @@ func main() {
 		log.Fatalf("JWT_SECRET env variable is not set")
 	}
 
+	polkaKey := os.Getenv("POLKA_KEY")
+	if polkaKey == "" {
+		log.Fatalf("POLKA_KEY env variable is not set")
+	}
+
 	db, err := sql.Open("postgres", dbURL)
 	if err != nil {
 		log.Fatal("Failed to connect to database: ", err)
@@ -76,6 +82,7 @@ func main() {
 		platform:       platform,
 		jwtSecret:      jwtSecret,
 		tokenExp:       time.Minute * 15,
+		polkaKey: 		polkaKey,
 	}
 
 	mux := http.NewServeMux()
